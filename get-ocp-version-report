@@ -1,0 +1,80 @@
+import requests
+import re
+
+CHANNELS = ["4.21", "4.20", "4.19", "4.18", "4.16"]
+
+CINCINNATI_URL = "https://api.openshift.com/api/upgrades_info/v1/graph"
+
+
+def errata_url(advisory):
+    return f"https://access.redhat.com/errata/{advisory}"
+
+
+def get_latest_and_errata(channel):
+    params = {
+        "channel": f"stable-{channel}",
+        "arch": "amd64"
+    }
+
+    r = requests.get(CINCINNATI_URL, params=params)
+    r.raise_for_status()
+    data = r.json()
+
+    nodes = data.get("nodes", [])
+
+    # sort versions properly
+    nodes = sorted(
+        nodes,
+        key=lambda x: list(map(int, x["version"].split(".")))
+    )
+
+    latest = nodes[-1]
+
+    version = latest["version"]
+    metadata = latest.get("metadata", {})
+
+    # metadata sometimes contains URLs or text blobs
+    metadata_str = str(metadata)
+
+    rhsas = set(re.findall(r"RHSA-\d{4}:\d+", metadata_str))
+    rhbas = set(re.findall(r"RHBA-\d{4}:\d+", metadata_str))
+
+    return {
+        "version": version,
+        "RHSA": sorted(rhsas),
+        "RHBA": sorted(rhbas)
+    }
+
+
+def main():
+    print("\n=== ✅ FINAL OUTPUT (REAL DATA) ===\n")
+
+    for ch in CHANNELS:
+        try:
+            result = get_latest_and_errata(ch)
+
+            print(f"OpenShift {ch}")
+            print(f"  Latest z-stream: {result['version']}")
+
+            if result["RHSA"]:
+                for r in result["RHSA"]:
+                    print(f"    RHSA: {r}")
+                    print(f"      Link: {errata_url(r)}")
+            else:
+                print("    RHSA: None found")
+
+            if result["RHBA"]:
+                for r in result["RHBA"]:
+                    print(f"    RHBA: {r}")
+                    print(f"      Link: {errata_url(r)}")
+            else:
+                print("    RHBA: None found")
+
+            print("")
+
+        except Exception as e:
+            print(f"OpenShift {ch} → ERROR: {e}")
+
+
+if __name__ == "__main__":
+    main()
