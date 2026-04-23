@@ -34,6 +34,19 @@ def get_latest(channel):
 
     return nodes[-1]
 
+def normalize_errata(errata_list):
+    normalized = []
+
+    for e in errata_list:
+        prefix, rest = e.split(":")
+        year, number = prefix.split("-")[1], rest
+
+        # Pad to 4 digits
+        number = number.zfill(4)
+
+        normalized.append(f"{prefix}:{number}")
+
+    return normalized
 
 # -----------------------------
 # Extract errata
@@ -44,6 +57,9 @@ def extract_errata(metadata):
     rhsas = sorted(set(re.findall(r"RHSA-\d{4}:\d+", text)))
     rhbas = sorted(set(re.findall(r"RHBA-\d{4}:\d+", text)))
 
+    # Normalize here
+    rhsas = normalize_errata(rhsas)
+    rhbas = normalize_errata(rhbas)
     return rhsas, rhbas
 
 
